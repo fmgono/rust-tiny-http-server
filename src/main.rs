@@ -7,7 +7,7 @@ use tokio::net::TcpListener;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind("127.0.0.1:3000").await?;
-    println!("Listening on port 3000...");
+    println!("Listening on port 3000....");
     loop {
         let (mut socket, addr) = listener.accept().await?;
         println!("Connection established!");
