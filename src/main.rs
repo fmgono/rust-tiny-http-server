@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::usize;
+use tokio::fs;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
@@ -20,18 +21,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 Err(_) => 0,
             };
             let request = String::from_utf8_lossy(&buffer[..received_batch]).to_string();
-            if request.starts_with("GET / ") {
+            let (status_line, filename) = if request.starts_with("GET / ") {
                 println!("Routing to the root resource...");
+                ("HTTP/1.1 200 OK", "hello.html")
             } else if request.starts_with("GET /login") {
                 println!("Routing to the login resource...");
+                ("HTTP/1.1 200 OK", "login.html")
             } else {
                 println!("404 Not found");
-            }
-            println!("{:?}", request);
-            socket
-                .write_all(b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nHello from Rust!")
-                .await
-                .unwrap();
+                ("HTTP/1.1 404 NOT FOUND", "404.html")
+            };
+
+            let contents = fs::read_to_string("hello.html").await.unwrap();
+            let response = format!("{}\r\nConnection: close\r\n\r\n{}", status_line, contents);
+            socket.write_all(response.as_bytes()).await.unwrap();
         });
     }
 
