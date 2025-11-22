@@ -17,9 +17,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let read_socket = socket.read(&mut buffer).await;
             let received_batch = match read_socket {
                 Ok(n) => n,
-                Err(arms) => 0,
+                Err(_) => 0,
             };
-            println!("{:?}", String::from_utf8_lossy(&buffer[..received_batch]));
+            let request = String::from_utf8_lossy(&buffer[..received_batch]).to_string();
+            if request.starts_with("GET / ") {
+                println!("Routing to the root resource...");
+            } else if request.starts_with("GET /login") {
+                println!("Routing to the login resource...");
+            } else {
+                println!("404 Not found");
+            }
+            println!("{:?}", request);
             socket
                 .write_all(b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nHello from Rust!")
                 .await
