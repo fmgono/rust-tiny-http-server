@@ -1,3 +1,6 @@
+use sqlx::Pool;
+use sqlx::Postgres;
+use sqlx::postgres::PgPoolOptions;
 use std::error::Error;
 use std::usize;
 use tokio::fs;
@@ -7,6 +10,18 @@ use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    // load the env
+    dotenvy::dotenv()?;
+
+    // connect to the DB;
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&std::env::var("DATABASE_URL")?)
+        .await?;
+
+    println!("✅ Connection to Postgres successful!");
+    initiate_users_table(&pool).await?;
+
     let listener = TcpListener::bind("127.0.0.1:3000").await?;
     println!("Listening on port 3000....");
     loop {
@@ -40,6 +55,35 @@ async fn main() -> Result<(), Box<dyn Error>> {
             };
         });
     }
+
+    Ok(())
+}
+
+async fn initiate_users_table(pool: &Pool<Postgres>) -> Result<(), Box<dyn Error>> {
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL
+        );
+        "#,
+    )
+    .execute(pool)
+    .await;
+    println!("User table created...");
+
+    sqlx::query(
+        r#"
+        INSERT INTO users (id, name, email)
+        VALUES (1, 'Fathan', 'fathan@rust.com')
+        ON CONFLICT
+            DO NOTHING
+        "#,
+    )
+    .execute(pool)
+    .await
+    .inspect(|_| println!("Dummy user created..."));
 
     Ok(())
 }
