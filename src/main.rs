@@ -82,8 +82,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 socket.write_all(b"HTTP/1.1 500 ERROR\r\nConnection: close\r\n\r\nDatabase error").await.unwrap();
                             }
                         }
-
-                        ("HTTP/1.1 200 OK", "login.html")
+                        return;
                     } else {
                         println!("404 Not found");
                         ("HTTP/1.1 404 NOT FOUND", "404.html")
