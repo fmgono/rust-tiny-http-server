@@ -27,6 +27,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     loop {
         let (mut socket, addr) = listener.accept().await?;
         println!("Connection established!");
+        let db_pool = pool.clone();
 
         tokio::spawn(async move {
             let mut buffer = [0; 4096];
@@ -40,6 +41,48 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         ("HTTP/1.1 200 OK", "hello.html")
                     } else if request.starts_with("GET /login") {
                         println!("Routing to the login resource...");
+                        ("HTTP/1.1 200 OK", "login.html")
+                    } else if request.starts_with("GET /users/1 ") {
+                        #[derive(sqlx::FromRow, Debug)]
+                        struct User {
+                            id: i32,
+                            name: String,
+                            email: String,
+                        }
+
+                        // Query the database
+                        // fetch_optional returns Option<User> (None if not found)
+                        let user = sqlx::query_as::<_, User>(
+                            "SELECT id, name, email FROM users WHERE id = $1",
+                        )
+                        .bind(1)
+                        .fetch_optional(&db_pool)
+                        .await;
+
+                        match user {
+                            Ok(Some(u)) => {
+                                // Found! Manual JSON formatting for now
+                                let json = format!(
+                                    r#"{{"id": {}, "name": "{}", "email": "{}"}}"#,
+                                    u.id, u.name, u.email
+                                );
+                                let response = format!(
+                                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{}",
+                                    json
+                                );
+                                socket.write_all(response.as_bytes()).await.unwrap();
+                            }
+                            Ok(None) => {
+                                // Database worked, but user ID 1 doesn't exist
+                                socket.write_all(b"HTTP/1.1 404 NOT FOUND\r\nConnection: close\r\n\r\nUser not found").await.unwrap();
+                            }
+                            Err(e) => {
+                                // Database crashed
+                                eprintln!("DB Error: {}", e);
+                                socket.write_all(b"HTTP/1.1 500 ERROR\r\nConnection: close\r\n\r\nDatabase error").await.unwrap();
+                            }
+                        }
+
                         ("HTTP/1.1 200 OK", "login.html")
                     } else {
                         println!("404 Not found");
