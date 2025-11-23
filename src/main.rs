@@ -14,27 +14,30 @@ async fn main() -> Result<(), Box<dyn Error>> {
         println!("Connection established!");
 
         tokio::spawn(async move {
-            let mut buffer = [0; 1024];
-            let read_socket = socket.read(&mut buffer).await;
-            let received_batch = match read_socket {
-                Ok(n) => n,
-                Err(_) => 0,
-            };
-            let request = String::from_utf8_lossy(&buffer[..received_batch]).to_string();
-            let (status_line, filename) = if request.starts_with("GET / ") {
-                println!("Routing to the root resource...");
-                ("HTTP/1.1 200 OK", "hello.html")
-            } else if request.starts_with("GET /login") {
-                println!("Routing to the login resource...");
-                ("HTTP/1.1 200 OK", "login.html")
-            } else {
-                println!("404 Not found");
-                ("HTTP/1.1 404 NOT FOUND", "404.html")
-            };
+            let mut buffer = [0; 4096];
+            match socket.read(&mut buffer).await {
+                Ok(0) => return,
+                Ok(n) => {
+                    let request = String::from_utf8_lossy(&buffer[..n]).to_string();
+                    println!("Request => {}", request);
+                    let (status_line, filename) = if request.starts_with("GET / ") {
+                        println!("Routing to the root resource...");
+                        ("HTTP/1.1 200 OK", "hello.html")
+                    } else if request.starts_with("GET /login") {
+                        println!("Routing to the login resource...");
+                        ("HTTP/1.1 200 OK", "login.html")
+                    } else {
+                        println!("404 Not found");
+                        ("HTTP/1.1 404 NOT FOUND", "404.html")
+                    };
 
-            let contents = fs::read_to_string("hello.html").await.unwrap();
-            let response = format!("{}\r\nConnection: close\r\n\r\n{}", status_line, contents);
-            socket.write_all(response.as_bytes()).await.unwrap();
+                    let contents = fs::read_to_string(filename).await.unwrap();
+                    let response =
+                        format!("{}\r\nConnection: close\r\n\r\n{}", status_line, contents);
+                    socket.write_all(response.as_bytes()).await.unwrap();
+                }
+                Err(e) => println!("failed to read from socket; err = {:?}", e),
+            };
         });
     }
 
